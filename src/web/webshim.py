@@ -141,6 +141,53 @@ def convert(src, out, plugin_format='source'):
         sys.stdout, sys.stderr = so, se
 
 
+def outline(src, max_tracks=64, max_clips=80):
+    """What the page draws of a project before converting it: tempo, length
+    and each track's name, colour and clips (start, length, colour) - read
+    with the converter's own readers, nothing written. JSON text."""
+    import io
+    import json
+    so, se = sys.stdout, sys.stderr
+    sys.stdout = sys.stderr = io.StringIO()
+    os.environ['CPR_NO_REHOST'] = '1'
+    try:
+        for name in [m for m in sys.modules if m == 'cubaserea' or m.startswith('cubaserea.')]:
+            del sys.modules[name]
+        ext = os.path.splitext(src)[1].lower()
+        log = []
+        if ext in ('.cpr', '.bak'):
+            from cubaserea import cpr_read
+            p = cpr_read.read(src)
+        elif ext == '.als':
+            from cubaserea import als_read
+            p = als_read.read(src, log)
+        else:
+            from cubaserea import rpp_read
+            p = rpp_read.read(src, log)
+        hexc = lambda c: '#%02x%02x%02x' % tuple(int(v) for v in c[:3]) if c else None
+        tracks, end = [], 0.0
+        for t in p.tracks[:max_tracks]:
+            clips = []
+            for it in sorted(t.items, key=lambda i: i.pos)[:max_clips]:
+                if getattr(it, 'kind', '') == 'empty':
+                    continue
+                clips.append([round(it.pos, 3), round(max(it.length, 0.0), 3),
+                              hexc(getattr(it, 'color', None)), 1 if it.kind == 'midi' else 0,
+                              1 if it.mute else 0])
+                end = max(end, it.pos + it.length)
+            tracks.append({'n': t.name, 'c': hexc(t.color), 'f': 1 if t.is_folder else 0,
+                           'd': int(getattr(t, 'depth', 0) or 0), 'k': t.kind, 'clips': clips})
+        bpm = p.tempo[0][1] if getattr(p, 'tempo', None) else 120.0
+        sig = getattr(p, 'tsig', None) or (4, 4)
+        return json.dumps({'bpm': bpm, 'sig': list(sig)[:2], 'end': end, 'tracks': tracks,
+                           'more': max(0, len(p.tracks) - max_tracks)})
+    except Exception as e:      # a project the readers trip on: the page draws it empty
+        return json.dumps({'error': str(e)})
+    finally:
+        sys.stdout, sys.stderr = so, se
+        os.environ.pop('CPR_NO_REHOST', None)
+
+
 def zip_folder(folder, zip_path):
     """The converted folder as one zip, its own name at the top."""
     import zipfile

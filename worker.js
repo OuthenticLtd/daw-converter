@@ -26,7 +26,7 @@ async function boot() {
   });
   ff.setLogger(({ message }) => ffLog.push(message));
   post('status', { text: 'Loading the converter…' });
-  const z = await (await fetch('converter.zip?v=7b3791e11c', { cache: 'no-cache' })).arrayBuffer();
+  const z = await (await fetch('converter.zip?v=7fd32c77a3', { cache: 'no-cache' })).arrayBuffer();
   py.FS.writeFile('/tmp/converter.zip', new Uint8Array(z));
   py.runPython(`
 import zipfile, sys
@@ -183,6 +183,11 @@ self.onmessage = async (e) => {
   try {
     if (e.data.type === 'diag') {   // testing only: run Python, return its value
       post('diag', { text: String(py.runPython(e.data.code)) });
+      return;
+    }
+    if (e.data.type === 'outline') {   // the page's drawing of a project: tracks, colours, clips
+      py.globals.set('OSRC', ROOT + '/' + e.data.project);
+      post('outline', { project: e.data.project, json: String(py.runPython('import webshim; webshim.outline(OSRC)')) });
       return;
     }
     if (e.data.type === 'load') await load(e.data);

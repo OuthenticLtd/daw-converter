@@ -498,12 +498,18 @@ def live_plugins():
     2's VST3 on the development PC: scanstate 3, no entry). None where no
     Live is installed (the browser)."""
     import glob
-    import sqlite3
     import shutil
     import tempfile
     d = os.path.expandvars(r'%LOCALAPPDATA%\Ableton\Live Database')
     dbs = sorted(glob.glob(os.path.join(d, 'Live-files-*.db')))
     if not dbs:
+        return None
+    try:
+        # the browser's Python has no sqlite3 (and no Live database either):
+        # imported here, after that check, or every conversion to Live on the
+        # website stopped at this line
+        import sqlite3
+    except ImportError:
         return None
     tmp = tempfile.mkdtemp()
     try:
